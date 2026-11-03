@@ -1,11 +1,11 @@
-
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
 from app.api.v1.tasks import router as task_router
 from app.core.database import engine
-
+from app.api.v1.auth import router as auth_router
+from app.api.v1.users import router as user_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,6 +31,15 @@ app.include_router(
     prefix="/api/v1",
 )
 
+app.include_router(
+    auth_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    user_router,
+    prefix="/api/v1",
+)
 
 @app.get("/", tags=["Health"])
 async def root():
