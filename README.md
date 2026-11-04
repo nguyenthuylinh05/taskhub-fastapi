@@ -1,85 +1,59 @@
 # TaskHub - FastAPI Framework Practical Project
 
-## Day 3: Authentication & Security
+## Day 4: Authorization & RBAC
 
 ### Nội dung
 
-- **Environment Configuration:** Sử dụng `Pydantic Settings` để quản lý cấu hình ứng dụng và tải biến môi trường từ file `.env`.
-- **User Model Enhancement:** Bổ sung các trường `hashed_password`, `role`, `is_active` và `created_at` vào User Model.
-- **Alembic Migration:** Tạo và thực thi migration để cập nhật cấu trúc bảng `users`.
-- **Password Hashing:** Sử dụng `Passlib` và `Bcrypt` để mã hóa mật khẩu trước khi lưu vào database.
-- **Password Verification:** Kiểm tra mật khẩu người dùng bằng hàm `verify_password()`.
-- **User Registration:** Xây dựng API đăng ký tài khoản, kiểm tra email trùng lặp và lưu mật khẩu dưới dạng hash.
-- **User Login:** Xây dựng API đăng nhập và xác thực thông tin tài khoản.
-- **JWT Authentication:** Sử dụng `PyJWT` để tạo, giải mã và xác thực JSON Web Token (JWT) Access Token.
-- **Authentication Dependency:** Xây dựng `get_current_user` để xác thực Bearer Token và truy xuất người dùng từ database.
-- **Protected Endpoint:** Bảo vệ API bằng cơ chế JWT Authentication.
-- **Swagger Integration:** Tích hợp HTTP Bearer Authentication để kiểm thử các API yêu cầu đăng nhập.
+- **Role-Based Access Control (RBAC):** Xây dựng cơ chế phân quyền dựa trên vai trò người dùng (`ADMIN`, `USER`).
+- **Role Authorization Dependency:** Xây dựng `require_roles()` để kiểm tra quyền truy cập dựa trên vai trò được cho phép.
+- **Admin-Only Endpoint:** Bảo vệ endpoint `/api/v1/users/admin`, chỉ cho phép người dùng có vai trò `ADMIN` truy cập.
+- **Resource Ownership:** Đảm bảo mỗi người dùng chỉ có thể truy cập và thao tác trên các Task thuộc quyền sở hữu của mình.
+- **Automatic Task Ownership:** Tự động gán `user_id` của người đang đăng nhập khi tạo Task.
+- **Owner-Based Query:** Lọc danh sách và đếm số lượng Task theo `user_id`.
+- **Protected CRUD Operations:** Kiểm tra quyền sở hữu trước khi xem chi tiết, cập nhật hoặc xóa Task.
 
-### User Model
+### Authorization Components
 
-Bổ sung các trường phục vụ xác thực và quản lý tài khoản:
+| Component | Description |
+|---|---|
+| `require_roles()` | Kiểm tra vai trò người dùng |
+| `CurrentUser` | Lấy người dùng hiện tại đã xác thực |
+| `get_by_id_for_user()` | Truy vấn Task theo ID và chủ sở hữu |
+| `get_all_for_user()` | Lấy danh sách Task của một người dùng |
+| `count_for_user()` | Đếm số Task thuộc về một người dùng |
 
-| Field | Type | Description |
-|---|---|---|
-| `hashed_password` | String(255) | Mật khẩu đã được mã hóa |
-| `role` | String(50) | Vai trò người dùng, mặc định là `USER` |
-| `is_active` | Boolean | Trạng thái hoạt động của tài khoản |
-| `created_at` | DateTime | Thời điểm tạo tài khoản |
+### Resource Ownership Flow
 
-### Authentication Flow
-
-1. Người dùng gửi thông tin đăng ký thông qua Register API.
-2. Hệ thống kiểm tra email và mã hóa mật khẩu bằng Bcrypt.
-3. Thông tin tài khoản được lưu vào database.
-4. Người dùng gửi email và mật khẩu thông qua Login API.
-5. Hệ thống xác thực thông tin đăng nhập và tạo JWT Access Token.
-6. Client gửi JWT trong HTTP Header theo định dạng `Authorization: Bearer <token>`.
-7. `get_current_user` xác thực token, lấy User ID và truy xuất người dùng từ database.
-8. Nếu hợp lệ, người dùng được phép truy cập các API được bảo vệ.
+1. Client gửi request kèm JWT Access Token.
+2. `get_current_user` xác thực token và lấy thông tin người dùng.
+3. Khi tạo Task, hệ thống tự động gán `user_id` từ người dùng hiện tại.
+4. Khi truy vấn danh sách Task, hệ thống chỉ lấy dữ liệu có `user_id` tương ứng.
+5. Khi xem, cập nhật hoặc xóa Task, hệ thống kiểm tra đồng thời `task_id` và `user_id`.
+6. Nếu Task không tồn tại hoặc không thuộc quyền sở hữu của người dùng, API trả về `404 Not Found`.
 
 ### API Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/v1/auth/register` | Register a new user |
-| POST | `/api/v1/auth/login` | Authenticate user and generate JWT |
-| GET | `/api/v1/users/me` | Get current authenticated user |
-
-### Security Components
-
-- **Pydantic Settings:** Quản lý `DATABASE_URL`, `JWT_SECRET_KEY`, `JWT_ALGORITHM` và `ACCESS_TOKEN_EXPIRE_MINUTES`.
-- **Passlib / Bcrypt:** Hash và verify mật khẩu.
-- **PyJWT:** Encode và decode JWT Access Token.
-- **HTTPBearer:** Nhận Bearer Token từ HTTP Authorization Header.
-- **get_current_user:** Kiểm tra JWT, xác định người dùng và trạng thái tài khoản.
-- **UserResponse:** Chỉ trả về thông tin công khai của User, không tiết lộ `hashed_password`.
+| GET | `/api/v1/users/admin` | Admin-only endpoint |
+| POST | `/api/v1/tasks` | Create Task with automatic ownership |
+| GET | `/api/v1/tasks` | Get current user's Tasks |
+| GET | `/api/v1/tasks/{task_id}` | Get an owned Task |
+| PATCH | `/api/v1/tasks/{task_id}` | Update an owned Task |
+| DELETE | `/api/v1/tasks/{task_id}` | Delete an owned Task |
 
 ### Testing Results
 
-- Successfully tested user registration with valid information.
-- Verified `409 Conflict` when registering with an existing email.
-- Verified `422 Unprocessable Entity` when input data violates schema validation.
-- Successfully tested login with valid credentials and JWT generation.
-- Verified `401 Unauthorized` when login credentials are incorrect.
-- Successfully tested JWT decoding and signature validation.
-- Successfully tested protected endpoint `/api/v1/users/me` with a valid Bearer Token.
-- Verified `401 Unauthorized` when no token is provided.
-- Verified `401 Unauthorized` when using an invalid or expired token.
-- Verified JWT-based authentication through Swagger UI.
+- Successfully tested `ADMIN` access to `/api/v1/users/admin` with `200 OK`.
+- Verified `403 Forbidden` when a `USER` accesses the admin-only endpoint.
+- Successfully tested automatic assignment of `user_id` when creating a Task.
+- Verified that users can only retrieve their own Tasks.
+- Successfully tested pagination with user-specific filtering and counting.
+- Verified `404 Not Found` when accessing another user's Task.
+- Verified `404 Not Found` when attempting to update or delete another user's Task.
+- Successfully tested Task ownership isolation using two different user accounts.
 
-### Configuration
-
-Các biến môi trường được quản lý trong file `.env`:
-
-```env
-DATABASE_URL=sqlite+aiosqlite:///./taskhub.db
-JWT_SECRET_KEY=your-secret-key
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-```
-
-**Security Note:** File `.env` chứa thông tin cấu hình nhạy cảm và không được đưa lên Git repository. Sử dụng `.env.example` để cung cấp cấu hình mẫu.
+**Result:** Completed role-based access control (RBAC), authorization dependencies, admin-only endpoint protection and resource ownership enforcement for Task CRUD operations.
 
 ---
 
