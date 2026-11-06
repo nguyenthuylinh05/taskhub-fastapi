@@ -2,6 +2,8 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 
 import jwt
+import secrets
+import hashlib
 
 from app.core.config import settings
 
@@ -56,3 +58,15 @@ def decode_access_token(token: str) -> dict:
     )
 
     return payload
+
+
+def create_refresh_token() -> str:
+    """Generate a cryptographically secure refresh token."""
+    return secrets.token_urlsafe(64)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Hash a refresh token using SHA-256."""
+    return hashlib.sha256(
+        token.encode("utf-8")
+    ).hexdigest()

@@ -13,6 +13,11 @@ from app.repositories.task_repository import TaskRepository
 from app.services.task_service import TaskService
 from app.repositories.user_repository import UserRepository
 from app.services.auth_service import AuthService
+from app.services.user_service import UserService
+
+from app.repositories.refresh_token_repository import (
+    RefreshTokenRepository,
+)
 
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -45,10 +50,37 @@ TaskServiceDep = Annotated[
     Depends(get_task_service),
 ]
 
+
 def get_user_repository(
     db: DBSession,
 ) -> UserRepository:
     return UserRepository(db)
+
+
+def get_user_service(
+    repository: Annotated[
+        UserRepository,
+        Depends(get_user_repository),
+    ],
+) -> UserService:
+    return UserService(repository)
+
+
+UserServiceDep = Annotated[
+    UserService,
+    Depends(get_user_service),
+]
+
+def get_refresh_token_repository(
+    db: DBSession,
+) -> RefreshTokenRepository:
+    return RefreshTokenRepository(db)
+
+
+RefreshTokenRepositoryDep = Annotated[
+    RefreshTokenRepository,
+    Depends(get_refresh_token_repository),
+]
 
 
 def get_auth_service(
@@ -56,8 +88,12 @@ def get_auth_service(
         UserRepository,
         Depends(get_user_repository),
     ],
+    refresh_repository: RefreshTokenRepositoryDep,
 ) -> AuthService:
-    return AuthService(repository)
+    return AuthService(
+        repository,
+        refresh_repository,
+    )
 
 
 AuthServiceDep = Annotated[
