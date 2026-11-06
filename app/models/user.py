@@ -5,10 +5,12 @@ from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.core.roles import GlobalRole
 
 if TYPE_CHECKING:
     from app.models.task import Task
-
+    from app.models.workspace import Workspace
+    from app.models.workspace_member import WorkspaceMember
 
 class User(Base):
     __tablename__ = "users"
@@ -34,8 +36,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        default="USER",
-        server_default="USER",
+        default=GlobalRole.MEMBER.value,
+        server_default=GlobalRole.MEMBER.value,
     )
 
     is_active: Mapped[bool] = mapped_column(
@@ -56,3 +58,15 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+
+    workspaces_owned: Mapped[list["Workspace"]] = relationship(
+        "Workspace",
+        back_populates="owner",
+        foreign_keys="Workspace.owner_id",
+        )
+
+    workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        "WorkspaceMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
+)

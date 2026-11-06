@@ -18,6 +18,11 @@ from app.services.user_service import UserService
 from app.repositories.refresh_token_repository import (
     RefreshTokenRepository,
 )
+from app.repositories.workspace_repository import WorkspaceRepository
+from app.repositories.workspace_member_repository import (
+    WorkspaceMemberRepository,
+)
+from app.services.workspace_service import WorkspaceService
 
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -56,19 +61,9 @@ def get_user_repository(
 ) -> UserRepository:
     return UserRepository(db)
 
-
-def get_user_service(
-    repository: Annotated[
-        UserRepository,
-        Depends(get_user_repository),
-    ],
-) -> UserService:
-    return UserService(repository)
-
-
-UserServiceDep = Annotated[
-    UserService,
-    Depends(get_user_service),
+UserRepositoryDep = Annotated[
+    UserRepository,
+    Depends(get_user_repository),
 ]
 
 def get_refresh_token_repository(
@@ -82,6 +77,48 @@ RefreshTokenRepositoryDep = Annotated[
     Depends(get_refresh_token_repository),
 ]
 
+
+def get_workspace_repository(
+    db: DBSession,
+) -> WorkspaceRepository:
+    return WorkspaceRepository(db)
+
+
+WorkspaceRepositoryDep = Annotated[
+    WorkspaceRepository,
+    Depends(get_workspace_repository),
+]
+
+
+def get_workspace_member_repository(
+    db: DBSession,
+) -> WorkspaceMemberRepository:
+    return WorkspaceMemberRepository(db)
+
+
+WorkspaceMemberRepositoryDep = Annotated[
+    WorkspaceMemberRepository,
+    Depends(get_workspace_member_repository),
+]
+
+
+def get_user_service(
+    repository: Annotated[
+        UserRepository,
+        Depends(get_user_repository),
+    ],
+    refresh_repository: RefreshTokenRepositoryDep,
+) -> UserService:
+    return UserService(
+        repository,
+        refresh_repository,
+    )
+
+
+UserServiceDep = Annotated[
+    UserService,
+    Depends(get_user_service),
+]
 
 def get_auth_service(
     repository: Annotated[
@@ -179,3 +216,23 @@ def require_roles(*allowed_roles: str):
         return current_user
 
     return role_checker
+
+
+def get_workspace_service(
+    db: DBSession,
+    workspace_repository: WorkspaceRepositoryDep,
+    member_repository: WorkspaceMemberRepositoryDep,
+    user_repository: UserRepositoryDep,
+) -> WorkspaceService:
+    return WorkspaceService(
+        session=db,
+        workspace_repository=workspace_repository,
+        member_repository=member_repository,
+        user_repository=user_repository,
+    )
+
+
+WorkspaceServiceDep = Annotated[
+    WorkspaceService,
+    Depends(get_workspace_service),
+]

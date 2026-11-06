@@ -99,3 +99,25 @@ class RefreshTokenRepository:
 
         await self.session.execute(statement)
         await self.session.commit()
+
+
+    async def revoke_all_for_user(
+        self,
+        user_id: int,
+        now: datetime,
+    ) -> int:
+        """Revoke all active refresh tokens belonging to a user."""
+
+        statement = (
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+
+        result = await self.session.execute(statement)
+        await self.session.commit()
+
+        return result.rowcount or 0

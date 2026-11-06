@@ -15,7 +15,7 @@ from app.repositories.refresh_token_repository import (
     RefreshTokenRepository,
 )
 from app.schemas.auth import UserRegister, UserLogin
-
+from app.core.roles import GlobalRole
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -46,7 +46,8 @@ class AuthService:
             "email": str(data.email),
             "full_name": data.full_name,
             "hashed_password": hash_password(data.password),
-        }
+            "role": GlobalRole.MEMBER.value,
+    }
 
         return await self.repository.create(user_data)
 
