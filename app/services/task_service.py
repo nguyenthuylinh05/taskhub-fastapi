@@ -1,3 +1,4 @@
+
 from fastapi import HTTPException, status
 
 from app.repositories.task_repository import TaskRepository
@@ -6,20 +7,46 @@ from app.schemas.task import (
     TaskResponse,
     TaskUpdate,
 )
+from app.schemas.pagination import (
+    PaginationParams,
+    PaginatedResponse,
+)
 
 
 class TaskService:
+
     def __init__(self, repository: TaskRepository):
         self.repository = repository
 
-    def create_task(self, data: TaskCreate) -> TaskResponse:
-        return self.repository.create(data)
+    async def create_task(self, data: TaskCreate):
+        return await self.repository.create(
+            data.model_dump(mode="json")
+        )
 
-    def list_tasks(self) -> list[TaskResponse]:
-        return self.repository.get_all()
+    async def list_tasks(
+        self,
+        pagination: PaginationParams,
+    ):
+        items = await self.repository.get_all(
+            skip=pagination.skip,
+            limit=pagination.page_size,
+        )
 
-    def get_task(self, task_id: int) -> TaskResponse:
-        task = self.repository.get_by_id(task_id)
+        total = await self.repository.count()
+
+        return PaginatedResponse[TaskResponse](
+            items=items,
+            total=total,
+            page=pagination.page,
+            page_size=pagination.page_size,
+            total_pages=(
+                (total + pagination.page_size - 1)
+                // pagination.page_size
+            ),
+        )
+
+    async def get_task(self, task_id: int):
+        task = await self.repository.get_by_id(task_id)
 
         if task is None:
             raise HTTPException(
@@ -29,25 +56,21 @@ class TaskService:
 
         return task
 
-    def update_task(
-        self, task_id: int, data: TaskUpdate
-    ) -> TaskResponse:
-        self.get_task(task_id)
-        updated = self.repository.update(task_id, data)
+    async def update_task(
+        self,
+        task_id: int,
+        data: TaskUpdate,
+    ):
+        task = await self.get_task(task_id)
 
-        if updated is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Task not found",
-            )
+        changes = data.model_dump(
+            mode="json",
+            exclude_unset=True,
+        )
 
-        return updated
+        return await self.repository.update(task, changes)
 
-    def delete_task(self, task_id: int) -> None:
-        deleted = self.repository.delete(task_id)
+    async def delete_task(self, task_id: int):
+        task = await self.get_task(task_id)
 
-        if not deleted:
-            raise HTTPException(
-                status_code=404,
-                detail="Task not found",
-            )
+        await self.repository.delete(task)
