@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from app.models.user import User
 
 from app.repositories.task_repository import TaskRepository
 from app.schemas.task import (
@@ -6,20 +7,58 @@ from app.schemas.task import (
     TaskResponse,
     TaskUpdate,
 )
+from app.schemas.pagination import (
+    PaginationParams,
+    PaginatedResponse,
+)
 
 
 class TaskService:
+
     def __init__(self, repository: TaskRepository):
         self.repository = repository
 
-    def create_task(self, data: TaskCreate) -> TaskResponse:
-        return self.repository.create(data)
+    async def create_task(
+        self,
+        data: TaskCreate,
+        current_user: User,
+    ):
+        task_data = data.model_dump(mode="json")
+        task_data["user_id"] = current_user.id
 
-    def list_tasks(self) -> list[TaskResponse]:
-        return self.repository.get_all()
+        return await self.repository.create(task_data)
 
-    def get_task(self, task_id: int) -> TaskResponse:
-        task = self.repository.get_by_id(task_id)
+    async def list_tasks(
+        self,
+        pagination: PaginationParams,
+        current_user: User,
+    ):
+        items = await self.repository.get_all_for_user(
+            user_id=current_user.id,
+            skip=pagination.skip,
+            limit=pagination.page_size,
+        )
+
+        total = await self.repository.count_for_user(
+            user_id=current_user.id,
+        )
+
+        return PaginatedResponse[TaskResponse](
+            items=items,
+            total=total,
+            page=pagination.page,
+            page_size=pagination.page_size,
+            total_pages=(
+                (total + pagination.page_size - 1)
+                // pagination.page_size
+            ),
+    )
+
+    async def get_task(self, task_id: int, current_user: User):
+        task = await self.repository.get_by_id_for_user(
+            task_id=task_id,
+            user_id=current_user.id,
+        )
 
         if task is None:
             raise HTTPException(
@@ -29,25 +68,21 @@ class TaskService:
 
         return task
 
-    def update_task(
-        self, task_id: int, data: TaskUpdate
-    ) -> TaskResponse:
-        self.get_task(task_id)
-        updated = self.repository.update(task_id, data)
+    async def update_task(
+        self,
+        task_id: int,
+        data: TaskUpdate,
+        current_user: User,
+    ):
+        task = await self.get_task(task_id, current_user)
 
-        if updated is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Task not found",
-            )
+        changes = data.model_dump(
+            mode="json",
+            exclude_unset=True,
+        )
 
-        return updated
+        return await self.repository.update(task, changes)
 
-    def delete_task(self, task_id: int) -> None:
-        deleted = self.repository.delete(task_id)
-
-        if not deleted:
-            raise HTTPException(
-                status_code=404,
-                detail="Task not found",
-            )
+    async def delete_task(self, task_id: int, current_user: User):
+        task = await self.get_task(task_id, current_user)
+        await self.repository.delete(task)
